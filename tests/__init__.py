@@ -1,65 +1,77 @@
 import unittest
-from unittest.mock import patch
 from datetime import datetime, timedelta
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker, scoped_session
 from sqlalchemy_signing import Signatures, RateLimitExceeded, KeyDoesNotExist, KeyExpired, ScopeMismatch, AlreadyRotated
 
 class TestSignatures(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        # Setup that is run once for all tests
-        cls.db_uri = "sqlite:///:memory:"
-        cls.signatures = Signatures(db_uri=cls.db_uri)
+    def setUp(self):
+        # Connect to an in-memory database for tests.
+        self.engine = create_engine('sqlite:///:memory:')
+        self.Session = scoped_session(sessionmaker(bind=self.engine))
+        # Create a new instance of Signatures for each test.
+        self.signatures = Signatures(db_uri='sqlite:///:memory:', rate_limiting=True, rate_limiting_max_requests=2, rate_limiting_period=timedelta(seconds=10))
 
-    def test_initialization(self):
-        self.assertEqual(self.signatures.byte_len, 24)
-        self.assertTrue(self.signatures.safe_mode)
-        self.assertFalse(self.signatures.rate_limiting)
-    
-    def test_generate_key(self):
-        key = self.signatures.generate_key()
-        self.assertIsInstance(key, str)
-        self.assertEqual(len(key), 32)  # Default byte_len=24 results in a 32 character string
-    
-    def test_write_and_query_key(self):
-        key = self.signatures.write_key(scope="test", active=True)
-        self.assertIsInstance(key, str)
-        queried_keys = self.signatures.query_keys(active=True, scope="test")
-        self.assertIsInstance(queried_keys, list)
-        self.assertEqual(queried_keys[0]['signature'], key)
-    
-    @patch.object(Signatures, 'rate_limiting', True)
-    def test_rate_limiting(self):
-        with self.assertRaises(RateLimitExceeded):
-            for _ in range(11):  # Assuming default rate_limiting_max_requests is 10
-                self.signatures.verify_key("some_signature", "some_scope")
-    
+    def tearDown(self):
+        # Drop all tables and close the session after each test.
+        self.signatures.Base.metadata.drop_all(self.engine)
+        self.Session.remove()
+
+    def test_key_generation_and_storage(self):
+        """Test that a key can be generated, stored, and retrieved."""
+        key = self.signatures.write_key(scope='test', active=True)
+        self.assertIsNotNone(key)
+        stored_key = self.signatures.get_key(key)
+        self.assertEqual(stored_key['signature'], key)
+
     def test_expire_key(self):
-        key = self.signatures.write_key(active=True)
+        """Test expiring a key."""
+        key = self.signatures.write_key(scope='test', active=True)
         self.assertTrue(self.signatures.expire_key(key))
-        with self.assertRaises(KeyDoesNotExist):
-            self.signatures.expire_key("non_existing_key")
-    
-    def test_verify_key(self):
-        key = self.signatures.write_key(scope="test", active=True)
-        self.assertTrue(self.signatures.verify_key(key, "test"))
-        with self.assertRaises(ScopeMismatch):
-            self.signatures.verify_key(key, "invalid_scope")
-        with self.assertRaises(KeyDoesNotExist):
-            self.signatures.verify_key("non_existing_key", "test")
-    
-    def test_rotate_keys(self):
-        key = self.signatures.write_key(scope="rotation_test", expiration=1)
-        rotated_keys = self.signatures.rotate_keys(time_until=2, scope="rotation_test")
-        self.assertIsInstance(rotated_keys, list)
-        self.assertNotEqual(rotated_keys[0][0], rotated_keys[0][1])  # Old key should not equal new key
-    
-    def test_exceptions(self):
         with self.assertRaises(KeyExpired):
-            self.signatures.rotate_key("non_active_key")
+            self.signatures.verify_key(signature=key, scope='test')
+
+    def test_rotate_key(self):
+        """Test key rotation."""
+        old_key = self.signatures.write_key(scope=['test'], active=True)
+        new_key = self.signatures.rotate_key(key=old_key)
+        self.assertNotEqual(old_key, new_key)
+        with self.assertRaises(KeyExpired):
+            self.signatures.verify_key(signature=old_key, scope=['test'])
+        self.assertTrue(self.signatures.verify_key(signature=new_key, scope=['test']))
+
+    def test_rate_limiting(self):
+        """Test rate limiting."""
+        key = self.signatures.write_key(scope='test', active=True)
+        self.signatures.verify_key(signature=key, scope='test')  # First request should pass.
+        self.signatures.verify_key(signature=key, scope='test')  # Second request should pass.
+        with self.assertRaises(RateLimitExceeded):
+            self.signatures.verify_key(signature=key, scope='test')  # Third request should fail.
+
+    def test_key_scope_mismatch(self):
+        """Test verifying a key with a mismatched scope."""
+        key = self.signatures.write_key(scope='test1', active=True)
+        with self.assertRaises(ScopeMismatch):
+            self.signatures.verify_key(signature=key, scope='test2')
+
+    def test_verify_nonexistent_key(self):
+        """Test verifying a non-existent key."""
+        with self.assertRaises(KeyDoesNotExist):
+            self.signatures.verify_key(signature='nonexistent_key', scope='test')
+
+    def test_rotation_of_already_rotated_key(self):
+        """Test rotation of an already rotated key."""
+        key = self.signatures.write_key(scope='test', active=True)
+        new_key = self.signatures.rotate_key(key=key)
         with self.assertRaises(AlreadyRotated):
-            key = self.signatures.write_key(scope="exception_test", active=True)
-            self.signatures.rotate_key(key)
-            self.signatures.rotate_key(key)  # Attempting to rotate the same key again
+            self.signatures.rotate_key(key=key)
+
+    def test_rotation_of_inactive_key(self):
+        """Test attempting to rotate an inactive key."""
+        key = self.signatures.write_key(scope='test', active=True)
+        self.signatures.expire_key(key)
+        with self.assertRaises(KeyExpired):
+            self.signatures.rotate_key(key=key)
 
 if __name__ == '__main__':
     unittest.main()

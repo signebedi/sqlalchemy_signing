@@ -156,25 +156,26 @@ class Signatures:
 
                 Signing = instance.get_model()
 
-                signing_key = Signing.query.filter_by(signature=signature).first()
+                with instance.Session() as session:
+                    signing_key = session.query(Signing).filter_by(signature=signature).first()
 
-                # If the key does not exist
-                if signing_key:
+                    # If the key does not exist
+                    if signing_key:
 
-                    # Reset request_count if period has passed since last_request_time
-                    if datetime.datetime.utcnow() - signing_key.last_request_time >= instance.rate_limiting_period:
-                        signing_key.request_count = 0
+                        # Reset request_count if period has passed since last_request_time
+                        if datetime.datetime.utcnow() - signing_key.last_request_time >= instance.rate_limiting_period:
+                            signing_key.request_count = 0
+                            signing_key.last_request_time = datetime.datetime.utcnow()
+
+                        # Check if request_count exceeds max_requests
+                        if signing_key.request_count >= instance.rate_limiting_max_requests:
+                            raise RateLimitExceeded("Too many requests. Please try again later.")
+
+                        # If limit not exceeded, increment request_count and update last_request_time
+                        signing_key.request_count += 1
                         signing_key.last_request_time = datetime.datetime.utcnow()
 
-                    # Check if request_count exceeds max_requests
-                    if signing_key.request_count >= instance.rate_limiting_max_requests:
-                        raise RateLimitExceeded("Too many requests. Please try again later.")
-
-                    # If limit not exceeded, increment request_count and update last_request_time
-                    signing_key.request_count += 1
-                    signing_key.last_request_time = datetime.datetime.utcnow()
-
-                    instance.Session().commit()
+                        session.commit()
 
                 return self.func(instance, signature, *args, **kwargs)
             return wrapper
@@ -213,12 +214,14 @@ class Signatures:
         Returns:
             str: The generated and written signing key.
         """
+        Signing = self.get_model()
+
         with self.Session() as session:
             # Generate a unique key
             key = self.generate_key()
             
             # Ensure the key is unique
-            while session.query(self.Signing).filter_by(signature=key).first() is not None:
+            while session.query(Signing).filter_by(signature=key).first() is not None:
                 key = self.generate_key()
 
             # Prepare the data for the new key
@@ -236,11 +239,11 @@ class Signatures:
             if previous_key:
                 signing_fields['previous_key'] = previous_key
 
-            new_key = self.Signing(**signing_fields)
+            new_key = Signing(**signing_fields)
             
             session.add(new_key)
+            session.commit()
 
-            # The commit and close operations are automatically handled by the context manager
 
         return key
 
@@ -332,8 +335,8 @@ class Signatures:
 
         Signing = self.get_model()
 
-
-        signing_key = Signing.query.filter_by(signature=signature).first()
+        with self.Session() as session:
+            signing_key = session.query(Signing).filter_by(signature=signature).first()
 
         # if the key doesn't exist
         if not signing_key:
@@ -356,7 +359,7 @@ class Signatures:
             scope = [scope]
 
         # if the signing key's scope doesn't match any of the required scopes
-        if not set(scope).intersection(set(signing_key.scope)):
+        if signing_key.scope and not set(scope).intersection(set(signing_key.scope)):
             raise ScopeMismatch("This key does not match the required scope.")
 
         # # if the signing key's scope doesn't match the required scope
@@ -479,7 +482,8 @@ class Signatures:
 
         Signing = self.get_model()
 
-        key = Signing.query.filter_by(signature=signature).first()
+        with self.Session() as session:
+            key = session.query(Signing).filter_by(signature=signature).first()
 
         if key:
             return {'signature': key.signature, 'email': key.email, 'scope': key.scope, 'active': key.active, 'timestamp': key.timestamp, 'expiration': key.expiration, 'previous_key': key.previous_key, 'rotated': key.rotated}
