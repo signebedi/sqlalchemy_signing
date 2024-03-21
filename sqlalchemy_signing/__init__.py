@@ -89,7 +89,16 @@ class Signatures:
     of signing keys in the database.
     """
     
-    def __init__(self, db_uri:str, safe_mode:bool=True, byte_len:int=24, rate_limiting=False, rate_limiting_max_requests=10, rate_limiting_period=datetime.timedelta(minutes=1), Base=None):
+    def __init__(
+        self, 
+        db_uri:str, 
+        safe_mode:bool=True, 
+        byte_len:int=24, 
+        rate_limiting=False, 
+        rate_limiting_max_requests=10, 
+        rate_limiting_period=datetime.timedelta(minutes=1),
+        # Base=None,
+    ):
         """
         Initializes a new instance of the Signatures class.
 
@@ -102,11 +111,11 @@ class Signatures:
             rate_limiting_period (datetime.timedelta, optional): Time period for rate limiting. Defaults to 1 hour.
         """
 
-        if not Base:
-            self.Base = declarative_base()
-        else:
-            self.Base = Base
-
+        # if not Base:
+        #     self.Base = declarative_base()
+        # else:
+        #     self.Base = Base
+        self.Base = declarative_base()
 
         self.Signing = self.get_model()
 
