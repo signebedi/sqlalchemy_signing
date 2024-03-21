@@ -26,26 +26,51 @@ from typing import Union, List, Dict, Any, Optional
 
 
 
-Base = declarative_base()
+LocalBase = declarative_base()
 
-class Signing(Base):
-    __tablename__ = 'signing'
-    signature = Column(String(1000), primary_key=True) 
-    email = Column(String(100)) 
-    scope = Column(JSON())
-    active = Column(Boolean)
-    timestamp = Column(DateTime, nullable=False, default=datetime.datetime.utcnow)
-    expiration = Column(DateTime, nullable=False, default=datetime.datetime.utcnow)
-    # A 0 expiration int means it will never expire
-    expiration_int = Column(Integer, nullable=False, default=0)
-    request_count = Column(Integer, default=0)
-    last_request_time = Column(DateTime, default=datetime.datetime.utcnow)
-    previous_key = Column(String(1000), ForeignKey('signing.signature'), nullable=True)
-    rotated = Column(Boolean)
-    # parent = db.relationship("Signing", remote_side=[signature]) # self referential relationship
-    children = relationship('Signing', backref=backref('parent', remote_side=[signature])) # self referential relationship
+# class Signing(LocalBase):
+#     __tablename__ = 'signing'
+#     signature = Column(String(1000), primary_key=True) 
+#     email = Column(String(100)) 
+#     scope = Column(JSON())
+#     active = Column(Boolean)
+#     timestamp = Column(DateTime, nullable=False, default=datetime.datetime.utcnow)
+#     expiration = Column(DateTime, nullable=False, default=datetime.datetime.utcnow)
+#     # A 0 expiration int means it will never expire
+#     expiration_int = Column(Integer, nullable=False, default=0)
+#     request_count = Column(Integer, default=0)
+#     last_request_time = Column(DateTime, default=datetime.datetime.utcnow)
+#     previous_key = Column(String(1000), ForeignKey('signing.signature'), nullable=True)
+#     rotated = Column(Boolean)
+#     # parent = db.relationship("Signing", remote_side=[signature]) # self referential relationship
+#     children = relationship('Signing', backref=backref('parent', remote_side=[signature])) # self referential relationship
 
 
+
+def create_signing_class(Base=None):
+    if Base is None:
+        Base = LocalBase
+
+    class Signing(Base):
+        __tablename__ = 'signing'
+        signature = Column(String(1000), primary_key=True) 
+        email = Column(String(100)) 
+        scope = Column(JSON())
+        active = Column(Boolean)
+        timestamp = Column(DateTime, nullable=False, default=datetime.datetime.utcnow)
+        expiration = Column(DateTime, nullable=False, default=datetime.datetime.utcnow)
+        # A 0 expiration int means it will never expire
+        expiration_int = Column(Integer, nullable=False, default=0)
+        request_count = Column(Integer, default=0)
+        last_request_time = Column(DateTime, default=datetime.datetime.utcnow)
+        previous_key = Column(String(1000), ForeignKey('signing.signature'), nullable=True)
+        rotated = Column(Boolean)
+        # parent = db.relationship("Signing", remote_side=[signature]) # self referential relationship
+        children = relationship('Signing', backref=backref('parent', remote_side=[signature])) # self referential relationship
+
+    return Signing
+
+Signing = create_signing_class()
 
 class RateLimitExceeded(Exception):
     """
@@ -119,7 +144,8 @@ class Signatures:
         rate_limiting=False, 
         rate_limiting_max_requests=10, 
         rate_limiting_period=datetime.timedelta(minutes=1),
-        # Base=None,
+        Base=LocalBase,
+        Signing=Signing,
     ):
         """
         Initializes a new instance of the Signatures class.

@@ -9,7 +9,7 @@ from sqlalchemy_signing import (
     KeyExpired, 
     ScopeMismatch, 
     AlreadyRotated,
-    Base,
+    LocalBase,
 )
 class TestSignatures(unittest.TestCase):
     def setUp(self):
@@ -21,7 +21,7 @@ class TestSignatures(unittest.TestCase):
 
     def tearDown(self):
         # Drop all tables and close the session after each test.
-        Base.metadata.drop_all(self.engine)
+        LocalBase.metadata.drop_all(self.engine)
         self.Session.remove()
 
     def test_key_generation_and_storage(self):
