@@ -114,7 +114,7 @@ class Signatures:
         self.Session = scoped_session(sessionmaker(bind=self.engine))
 
         # Create the table for Signing, without affecting existing tables
-        self.Base.metadata.create_all(self.engine, tables=[self.Signing.__table__])
+        self.Base.metadata.create_all(self.engine, tables=[self.Signing.__table__], extend_existing=True)
 
 
         self.byte_len = byte_len
