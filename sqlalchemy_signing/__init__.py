@@ -25,6 +25,28 @@ from sqlalchemy.exc import SQLAlchemyError
 from typing import Union, List, Dict, Any, Optional
 
 
+
+Base = declarative_base()
+
+class Signing(Base):
+    __tablename__ = 'signing'
+    signature = Column(String(1000), primary_key=True) 
+    email = Column(String(100)) 
+    scope = Column(JSON())
+    active = Column(Boolean)
+    timestamp = Column(DateTime, nullable=False, default=datetime.datetime.utcnow)
+    expiration = Column(DateTime, nullable=False, default=datetime.datetime.utcnow)
+    # A 0 expiration int means it will never expire
+    expiration_int = Column(Integer, nullable=False, default=0)
+    request_count = Column(Integer, default=0)
+    last_request_time = Column(DateTime, default=datetime.datetime.utcnow)
+    previous_key = Column(String(1000), ForeignKey('signing.signature'), nullable=True)
+    rotated = Column(Boolean)
+    # parent = db.relationship("Signing", remote_side=[signature]) # self referential relationship
+    children = relationship('Signing', backref=backref('parent', remote_side=[signature])) # self referential relationship
+
+
+
 class RateLimitExceeded(Exception):
     """
     An exception that is raised when the request count for a specific signature 
@@ -115,7 +137,7 @@ class Signatures:
         #     self.Base = declarative_base()
         # else:
         #     self.Base = Base
-        self.Base = declarative_base()
+        # self.Base = declarative_base()
 
         self.Signing = self.get_model()
 
@@ -123,7 +145,8 @@ class Signatures:
         self.Session = scoped_session(sessionmaker(bind=self.engine))
 
         # Create the table for Signing, without affecting existing tables
-        self.Base.metadata.create_all(self.engine, tables=[self.Signing.__table__])
+        # self.Base.metadata.create_all(self.engine, tables=[self.Signing.__table__])
+        Base.metadata.create_all(self.engine, tables=[self.Signing.__table__])
 
 
         self.byte_len = byte_len
@@ -397,23 +420,6 @@ class Signatures:
         """
 
         if not hasattr(self, '_model'):
-            class Signing(self.Base):
-                __tablename__ = 'signing'
-                signature = Column(String(1000), primary_key=True) 
-                email = Column(String(100)) 
-                scope = Column(JSON())
-                active = Column(Boolean)
-                timestamp = Column(DateTime, nullable=False, default=datetime.datetime.utcnow)
-                expiration = Column(DateTime, nullable=False, default=datetime.datetime.utcnow)
-                # A 0 expiration int means it will never expire
-                expiration_int = Column(Integer, nullable=False, default=0)
-                request_count = Column(Integer, default=0)
-                last_request_time = Column(DateTime, default=datetime.datetime.utcnow)
-                previous_key = Column(String(1000), ForeignKey('signing.signature'), nullable=True)
-                rotated = Column(Boolean)
-                # parent = db.relationship("Signing", remote_side=[signature]) # self referential relationship
-                children = relationship('Signing', backref=backref('parent', remote_side=[signature])) # self referential relationship
-
             self._model = Signing
 
         return self._model

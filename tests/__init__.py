@@ -2,8 +2,15 @@ import unittest
 from datetime import datetime, timedelta
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, scoped_session
-from sqlalchemy_signing import Signatures, RateLimitExceeded, KeyDoesNotExist, KeyExpired, ScopeMismatch, AlreadyRotated
-
+from sqlalchemy_signing import (
+    Signatures, 
+    RateLimitExceeded, 
+    KeyDoesNotExist, 
+    KeyExpired, 
+    ScopeMismatch, 
+    AlreadyRotated,
+    Base,
+)
 class TestSignatures(unittest.TestCase):
     def setUp(self):
         # Connect to an in-memory database for tests.
@@ -14,7 +21,7 @@ class TestSignatures(unittest.TestCase):
 
     def tearDown(self):
         # Drop all tables and close the session after each test.
-        self.signatures.Base.metadata.drop_all(self.engine)
+        Base.metadata.drop_all(self.engine)
         self.Session.remove()
 
     def test_key_generation_and_storage(self):
