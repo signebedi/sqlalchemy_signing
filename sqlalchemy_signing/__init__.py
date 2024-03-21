@@ -34,12 +34,12 @@ LocalBase = declarative_base()
 #     email = Column(String(100)) 
 #     scope = Column(JSON())
 #     active = Column(Boolean)
-#     timestamp = Column(DateTime, nullable=False, default=datetime.datetime.utcnow)
-#     expiration = Column(DateTime, nullable=False, default=datetime.datetime.utcnow)
+#     timestamp = Column(DateTime, nullable=False, default=datetime_override)
+#     expiration = Column(DateTime, nullable=False, default=datetime_override)
 #     # A 0 expiration int means it will never expire
 #     expiration_int = Column(Integer, nullable=False, default=0)
 #     request_count = Column(Integer, default=0)
-#     last_request_time = Column(DateTime, default=datetime.datetime.utcnow)
+#     last_request_time = Column(DateTime, default=datetime_override)
 #     previous_key = Column(String(1000), ForeignKey('signing.signature'), nullable=True)
 #     rotated = Column(Boolean)
 #     # parent = db.relationship("Signing", remote_side=[signature]) # self referential relationship
@@ -47,7 +47,7 @@ LocalBase = declarative_base()
 
 
 
-def create_signing_class(Base=None):
+def create_signing_class(Base=None, datetime_override=datetime.datetime.utcnow):
     if Base is None:
         Base = LocalBase
 
@@ -57,12 +57,12 @@ def create_signing_class(Base=None):
         email = Column(String(100)) 
         scope = Column(JSON())
         active = Column(Boolean)
-        timestamp = Column(DateTime, nullable=False, default=datetime.datetime.utcnow)
-        expiration = Column(DateTime, nullable=False, default=datetime.datetime.utcnow)
+        timestamp = Column(DateTime, nullable=False, default=datetime_override)
+        expiration = Column(DateTime, nullable=False, default=datetime_override)
         # A 0 expiration int means it will never expire
         expiration_int = Column(Integer, nullable=False, default=0)
         request_count = Column(Integer, default=0)
-        last_request_time = Column(DateTime, default=datetime.datetime.utcnow)
+        last_request_time = Column(DateTime, default=datetime_override)
         previous_key = Column(String(1000), ForeignKey('signing.signature'), nullable=True)
         rotated = Column(Boolean)
         # parent = db.relationship("Signing", remote_side=[signature]) # self referential relationship
@@ -144,6 +144,7 @@ class Signatures:
         rate_limiting=False, 
         rate_limiting_max_requests=10, 
         rate_limiting_period=datetime.timedelta(minutes=1),
+        datetime_override=datetime.datetime.utcnow,
         Base=LocalBase,
         Signing=Signing,
     ):
@@ -226,9 +227,9 @@ class Signatures:
                     if signing_key:
 
                         # Reset request_count if period has passed since last_request_time
-                        if datetime.datetime.utcnow() - signing_key.last_request_time >= instance.rate_limiting_period:
+                        if datetime_override() - signing_key.last_request_time >= instance.rate_limiting_period:
                             signing_key.request_count = 0
-                            signing_key.last_request_time = datetime.datetime.utcnow()
+                            signing_key.last_request_time = datetime_override()
 
                         # Check if request_count exceeds max_requests
                         if signing_key.request_count >= instance.rate_limiting_max_requests:
@@ -236,7 +237,7 @@ class Signatures:
 
                         # If limit not exceeded, increment request_count and update last_request_time
                         signing_key.request_count += 1
-                        signing_key.last_request_time = datetime.datetime.utcnow()
+                        signing_key.last_request_time = datetime_override()
 
                         session.commit()
 
@@ -294,9 +295,9 @@ class Signatures:
                 'email': email.lower() if email else "", 
                 'active': active,
                 'rotated': False,
-                'expiration': (datetime.datetime.utcnow() + datetime.timedelta(hours=expiration)) if expiration else datetime.datetime(9999, 12, 31, 23, 59, 59),
+                'expiration': (datetime_override() + datetime.timedelta(hours=expiration)) if expiration else datetime.datetime(9999, 12, 31, 23, 59, 59),
                 'expiration_int': expiration,
-                'timestamp': datetime.datetime.utcnow(),
+                'timestamp': datetime_override(),
             }
 
             if previous_key:
@@ -412,7 +413,7 @@ class Signatures:
             raise KeyExpired("This key is no longer active.")
 
         # if the signing key's expiration time has passed
-        if signing_key.expiration < datetime.datetime.utcnow():
+        if signing_key.expiration < datetime_override():
             self.expire_key(signature)
             # return False
             raise KeyExpired("This key is expired.")
@@ -553,7 +554,7 @@ class Signatures:
 
         # get keys that will expire in the next time_until hours
         query = Signing.query.filter(
-            Signing.expiration <= (datetime.datetime.utcnow() + datetime.timedelta(hours=time_until)),
+            Signing.expiration <= (datetime_override() + datetime.timedelta(hours=time_until)),
             Signing.active == True
         )
 
