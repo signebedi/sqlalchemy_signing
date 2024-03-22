@@ -14,12 +14,12 @@ from sqlalchemy import (
     ForeignKey, 
     JSON,
 )
-from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import (
     sessionmaker, 
     relationship, 
     scoped_session, 
-    backref
+    backref,
+    declarative_base,
 )
 from sqlalchemy.exc import SQLAlchemyError
 from typing import Union, List, Dict, Any, Optional
