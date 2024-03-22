@@ -455,28 +455,29 @@ class Signatures:
 
         Signing = self.get_model()
 
-        query = Signing.query
+        with self.Session() as session:
+            query = session.query(Signing)
 
-        if active is not None:
-            query = query.filter(Signing.active == active)
+            if active is not None:
+                query = query.filter(Signing.active == active)
 
-        # Convert scope to a list if it's a string
-        if isinstance(scope, str):
-            scope = [scope]
+            # Convert scope to a list if it's a string
+            if isinstance(scope, str):
+                scope = [scope]
 
-        if scope:
+            if scope:
 
-            for s in scope:
-                # https://stackoverflow.com/a/44250678/13301284
-                query = query.filter(Signing.scope.comparator.contains(s))
-                
-        if email:
-            query = query.filter(Signing.email == email)
+                for s in scope:
+                    # https://stackoverflow.com/a/44250678/13301284
+                    query = query.filter(Signing.scope.comparator.contains(s))
+                    
+            if email:
+                query = query.filter(Signing.email == email)
 
-        if previous_key:
-            query = query.filter(Signing.previous_key == previous_key)
+            if previous_key:
+                query = query.filter(Signing.previous_key == previous_key)
 
-        result = query.all()
+            result = query.all()
 
         if not result:
             raise Exception("No results found for given parameters.")
@@ -533,34 +534,36 @@ class Signatures:
         Returns:
             List[Tuple[str, str]]: A list of tuples containing old keys and the new keys replacing them
         """
+
         Signing = self.get_model()
 
         # get keys that will expire in the next time_until hours
-        query = Signing.query.filter(
-            Signing.expiration <= (self.datetime_override() + datetime.timedelta(hours=time_until)),
-            Signing.active == True
-        )
+        with self.Session() as session:
+            query = session.query(Signing).filter(
+                Signing.expiration <= (self.datetime_override() + datetime.timedelta(hours=time_until)),
+                Signing.active == True
+            )
 
-        # Convert scope to a list if it's a string
-        if isinstance(scope, str):
-            scope = [scope]
+            # Convert scope to a list if it's a string
+            if isinstance(scope, str):
+                scope = [scope]
 
-        if scope:
+            if scope:
 
-            for s in scope:
-                # https://stackoverflow.com/a/44250678/13301284
-                query = query.filter(Signing.scope.comparator.contains(s))
+                for s in scope:
+                    # https://stackoverflow.com/a/44250678/13301284
+                    query = query.filter(Signing.scope.comparator.contains(s))
 
-        expiring_keys = query.all()
+            expiring_keys = query.all()
 
-        key_list = []
+            key_list = []
 
-        for key in expiring_keys:
+            for key in expiring_keys:
 
-            old_key = key.signature
-            new_key = self.rotate_key(key.signature)
+                old_key = key.signature
+                new_key = self.rotate_key(key.signature)
 
-            key_list.append((old_key, new_key))
+                key_list.append((old_key, new_key))
 
         # We may need to potentially modify the return behavior to provide greater detail ... 
         # for example, a list of old keys mapped to their new keys and emails.
