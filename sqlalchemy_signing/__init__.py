@@ -128,6 +128,7 @@ class Signatures:
         datetime_override=datetime.datetime.utcnow,
         Base=LocalBase,
         Signing=Signing,
+        create_tables=True, # If True, this will run create_all on the database tables
     ):
         """
         Initializes a new instance of the Signatures class.
@@ -154,7 +155,8 @@ class Signatures:
 
         # Create the table for Signing, without affecting existing tables
         # self.Base.metadata.create_all(self.engine, tables=[self.Signing.__table__])
-        Base.metadata.create_all(self.engine, tables=[self.Signing.__table__])
+        if create_tables:
+            Base.metadata.create_all(self.engine, tables=[self.Signing.__table__])
 
 
         self.byte_len = byte_len
