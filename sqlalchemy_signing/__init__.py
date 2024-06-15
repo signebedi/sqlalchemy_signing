@@ -28,14 +28,22 @@ from typing import Union, List, Dict, Any, Optional
 
 LocalBase = declarative_base()
 
-def create_signing_class(Base=None, datetime_override=datetime.datetime.utcnow):
+def create_signing_class(Base=None, datetime_override=datetime.datetime.utcnow, email_foreign_key_mapping: None | str = None):
+    """Factory for the Signing class, which allows several overrides for customization"""
     if Base is None:
         Base = LocalBase
 
     class Signing(Base):
         __tablename__ = 'signing'
-        signature = Column(String(1000), primary_key=True) 
-        email = Column(String(100)) 
+        signature = Column(String(1000), primary_key=True)
+        
+        # Allow users to map email as a foreign key, see
+        # https://github.com/signebedi/sqlalchemy_signing/issues/16
+        if isinstance(email_foreign_key_mapping, str):
+            email = Column(String(100), ForeignKey(email_foreign_key_mapping))
+        else:
+            email = Column(String(100)) 
+
         scope = Column(JSON())
         active = Column(Boolean)
         timestamp = Column(DateTime, nullable=False, default=datetime_override)
