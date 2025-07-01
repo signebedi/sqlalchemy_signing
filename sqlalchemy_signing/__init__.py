@@ -543,59 +543,33 @@ class Signatures:
 
 
 
-    def rotate_keys(self, time_until:int=1, scope=None, only_active_key_rotation:bool=True) -> bool:
+    def rotate_keys(self, time_until:int=1, scope=None, only_active_key_rotation:bool=True, overwrite_scope:list|str|None=None) -> bool:
         """
         Rotates all keys that are about to expire.
         This is written with the background processes in mind. This can be wrapped in a celerybeat schedule or celery task.
         Args:
             time_until (int): rotate keys that are set to expire in this many hours.
-            scope (str, list): rotate keys within this scope. If None, all scopes are considered.
+            scope (str, list): rotate keys with this scope. If None, all scopes are considered.
             only_active_key_rotation (book): if true, this will only enable the system to rotate keys that are active.
+            overwrite_scope (str, list): If set, this will set a new scope for the new key. Defaults to None.
         Returns:
             List[Tuple[str, str]]: A list of tuples containing old keys and the new keys replacing them
         """
 
-        Signing = self.get_model()
-
-        # get keys that will expire in the next time_until hours
-        with self.Session() as session:
-            query = session.query(Signing).filter(
-                Signing.expiration <= (self.datetime_override() + datetime.timedelta(hours=time_until)),
-                Signing.active == only_active_key_rotation
-            )
-
-            # Convert scope to a list if it's a string
-            if isinstance(scope, str):
-                scope = [scope]
-
-            if scope:
-
-                for s in scope:
-                    # https://stackoverflow.com/a/44250678/13301284
-                    query = query.filter(Signing.scope.comparator.contains(s))
-
-            expiring_keys = query.all()
-
-            key_list = []
-
-            for key in expiring_keys:
-
-                old_key = key.signature
-                new_key = self.rotate_key(key.signature)
-
-                key_list.append((old_key, new_key))
 
         # We may need to potentially modify the return behavior to provide greater detail ... 
         # for example, a list of old keys mapped to their new keys and emails.
         # return True
         return key_list
 
-    def rotate_key(self, key: str, expiration:Optional[int]=None) -> str:
+    def rotate_key(self, key: str, expiration:Optional[int]=None, overwrite_scope:list|str|None=None) -> str:
         """
         Replaces an active key with a new key with the same properties, and sets the old key as inactive.
         Args:
             key (str): The signing key to be rotated.
             expiration (int): The number of hours until the new key will expire.
+            overwrite_scope (str, list): If set, this will set a new scope for the new key. Defaults to None.
+
         Returns:
             str: The new signing key.
         """
@@ -624,9 +598,20 @@ class Signatures:
             if expiration is None:
                 expiration = signing_key.expiration_int
 
+            # Set a new variable that will contain the scope that will be written to this new key
+            modified_scope: list
+
+            if isinstance(scope, str):
+                modified_scope = [overwrite_scope.lower()]
+            elif isinstance(scope, list):
+                modified_scope = [x.lower() for x in overwrite_scope]
+            else:
+                modified_scope=signing_key.scope
+
+
             # Generate a new key with the same properties
             new_key = self.write_key(
-                scope=signing_key.scope,
+                scope=modified_scope,
                 expiration=expiration,
                 active=True, 
                 email=signing_key.email,
