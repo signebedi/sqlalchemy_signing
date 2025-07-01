@@ -534,13 +534,14 @@ class Signatures:
 
 
 
-    def rotate_keys(self, time_until:int=1, scope=None) -> bool:
+    def rotate_keys(self, time_until:int=1, scope=None, only_active_key_rotation:bool=True) -> bool:
         """
         Rotates all keys that are about to expire.
         This is written with the background processes in mind. This can be wrapped in a celerybeat schedule or celery task.
         Args:
             time_until (int): rotate keys that are set to expire in this many hours.
             scope (str, list): rotate keys within this scope. If None, all scopes are considered.
+            only_active_key_rotation (book): if true, this will only enable the system to rotate keys that are active.
         Returns:
             List[Tuple[str, str]]: A list of tuples containing old keys and the new keys replacing them
         """
@@ -551,7 +552,7 @@ class Signatures:
         with self.Session() as session:
             query = session.query(Signing).filter(
                 Signing.expiration <= (self.datetime_override() + datetime.timedelta(hours=time_until)),
-                Signing.active == True
+                Signing.active == only_active_key_rotation
             )
 
             # Convert scope to a list if it's a string
