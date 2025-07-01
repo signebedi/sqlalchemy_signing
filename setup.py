@@ -35,6 +35,7 @@ setup(
     long_description_content_type="text/markdown",
     packages=find_packages(),
     install_requires=install_requires,
+    python_requires='>=3.10',
     classifiers=[
         'Development Status :: 3 - Alpha',
         'Intended Audience :: Developers',
