@@ -254,14 +254,14 @@ class Signatures:
             length = self.byte_len
         return secrets.token_urlsafe(length)
 
-    def write_key(self, scope:str=None, expiration:int=0, active:bool=True, email:str=None, previous_key:str=None) -> str:
+    def write_key(self, scope:str|list|None=None, expiration:int=0, active:bool=True, email:str=None, previous_key:str=None) -> str:
         """
         Writes a newly generated signing key to the database.
 
         This function will continuously attempt to generate a key until a unique one is created. 
 
         Args:
-            scope (str): The scope within which the signing key will be valid. Defaults to None.
+            scope (str, list): The scope within which the signing key will be valid. Defaults to None.
             expiration (int, optional): The number of hours after which the signing key will expire. 
                 If not provided or equals 0, the expiration will be set to zero (no-expiry). Defaults to 0.
             active (bool, optional): The status of the signing key. Defaults to True.
@@ -281,10 +281,19 @@ class Signatures:
             while session.query(Signing).filter_by(signature=key).first() is not None:
                 key = self.generate_key()
 
+            # This will ensure scope is always a list
+            modified_scope: list = []
+
+            if isinstance(scope, str):
+                modified_scope = [scope.lower()]
+            elif isinstance(scope, list):
+                modified_scope = [x.lower() for x in scope]
+
+
             # Prepare the data for the new key
             signing_fields = {
                 'signature': key, 
-                'scope': [scope.lower()] if isinstance(scope, str) else [],
+                'scope': modified_scope,
                 'email': email.lower() if email else "", 
                 'active': active,
                 'rotated': False,
