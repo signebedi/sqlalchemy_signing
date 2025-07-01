@@ -557,6 +557,36 @@ class Signatures:
         """
 
 
+        Signing = self.get_model()
+
+        # get keys that will expire in the next time_until hours
+        with self.Session() as session:
+            query = session.query(Signing.signature).filter(  # Query ONLY the signature column
+                Signing.expiration <= (self.datetime_override() + datetime.timedelta(hours=time_until)),
+                Signing.active == only_active_key_rotation
+            )
+
+            # Convert scope to a list if it's a string
+            if isinstance(scope, str):
+                scope = [scope]
+
+            if scope:
+                for s in scope:
+                    # https://stackoverflow.com/a/44250678/13301284
+                    query = query.filter(Signing.scope.comparator.contains(s))
+
+            # Get list of signature strings (not objects)
+            expiring_signatures = [row[0] for row in query.all()]  # Extract signature from each row tuple
+
+            key_list = []
+
+            for signature in expiring_signatures:
+                # signature is now just a string, no object to get detached
+                old_key = signature
+                new_key = self.rotate_key(signature, overwrite_scope=overwrite_scope)
+                key_list.append((old_key, new_key))
+
+
         # We may need to potentially modify the return behavior to provide greater detail ... 
         # for example, a list of old keys mapped to their new keys and emails.
         # return True
@@ -601,9 +631,9 @@ class Signatures:
             # Set a new variable that will contain the scope that will be written to this new key
             modified_scope: list
 
-            if isinstance(scope, str):
+            if isinstance(overwrite_scope, str):
                 modified_scope = [overwrite_scope.lower()]
-            elif isinstance(scope, list):
+            elif isinstance(overwrite_scope, list):
                 modified_scope = [x.lower() for x in overwrite_scope]
             else:
                 modified_scope=signing_key.scope
